@@ -109,7 +109,8 @@ class Solver(object):
     # training phase
     def train(self):
         iter_num = len(self.train_loader.dataset) // self.config.batch_size
-        
+        aveGrad = 0
+        self.optimizer.zero_grad()
         loss_vals=  []
         
         for epoch in range(self.config.epoch):
@@ -126,7 +127,7 @@ class Solver(object):
                     sal_image, sal_depth, sal_label, sal_edge= sal_image.to(device), sal_depth.to(device), sal_label.to(device),sal_edge.to(device)
 
                
-                self.optimizer.zero_grad()
+                
                 sal_label_coarse = F.interpolate(sal_label, size_coarse, mode='bilinear', align_corners=True)
                 
                 sal_final,sal_low,sal_med,sal_high,coarse_sal_rgb,coarse_sal_depth,Att,sal_edge_rgbd = self.net(sal_image,sal_depth)
@@ -141,7 +142,12 @@ class Solver(object):
                 r_sal_loss += sal_loss.data
                 r_sal_loss_item+=sal_loss.item() * sal_image.size(0)
                 sal_loss.backward()
-                self.optimizer.step()
+                # accumulate gradients as done in DSS
+                aveGrad += 1
+                if aveGrad % self.iter_size == 0:
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+                    aveGrad = 0
 
                 if (i + 1) % (self.show_every // self.config.batch_size) == 0:
                     print('epoch: [%2d/%2d], iter: [%5d/%5d]  ||  Sal : %0.4f  ||sal_final:%0.4f|| edge_loss:%0.4f|| r:%0.4f||d:%0.4f' % (
